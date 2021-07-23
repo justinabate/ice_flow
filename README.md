@@ -14,6 +14,7 @@
 (3) ```cd ice_mod; make fpga``` (synthesize, implement, and program), or ```make help``` for an individual process
 
 ## Remarks
+The .prj file in src/ must be manually updated with source file information; the paths specified at the bottom of the file must match the build and synthesis directories set in the makefile <br/> 
 The makefile assumes ```iceprog``` can be found in the ```$PATH``` <br/>
 ```libelf.so.1``` messages can be fixed by getting the 32-bit lib, finding the install, and putting a symlink in icecube2's installation directory below:
 ```
