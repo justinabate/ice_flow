@@ -166,7 +166,7 @@ begin
   led_2 <= r_rdata(3)(r_rdata(3)'high);
   led_3 <= r_rdata(7)(r_rdata(7)'high);
   led_4 <= r_rdata(11)(r_rdata(11)'high);
-  led_5 <= r_rdata(14)(r_rdata(14)'high);
+  led_5 <= r_rdata(ram_qty-1)(r_rdata(ram_qty-1)'high);
 
 
 end architecture;

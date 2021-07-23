@@ -78,11 +78,14 @@ SBT    = $(BUILD_DIR)/$(IMP_DIR)/$(NL_DIR)/$(PROJ_NAME)_sbt.vhd
 RPT    = $(BUILD_DIR)/$(IMP_DIR)/$(TM_DIR)/$(PROJ_NAME)_routed_timing.rpt
 BIN    = $(BUILD_DIR)/$(IMP_DIR)/$(BM_DIR)/$(PROJ_NAME)_bitmap.bin
 #
-# display function
-RUN = @echo "\n\e[1;33m$(shell date +"%Y-%m-%d %T"): ======== $(1) ========\e[m\n"; \
+# function runners
+SYN_RUN = @echo "\n\e[1;33m$(shell date +"%Y-%m-%d %T"): ======== $(1) ========\e[m\n"; \
+	$(ICE2_BIN)/synpwrap/$(1)
+ICE_RUN = @echo "\n\e[1;33m$(shell date +"%Y-%m-%d %T"): ======== $(1) ========\e[m\n"; \
+	$(ICE2_BIN)/$(1)
 #
 ##
-.PHONY: help sim fpga syn imp edifparser sbtplacer packer sbrouter netlister sbtimer bitmap program clean
+.PHONY: help sim syn imp fpga edifparser sbtplacer packer sbrouter netlister sbtimer bitmap program clean
 
 .ONESHELL:
 
@@ -124,37 +127,13 @@ sim:
 
 
 # Run icecube2 synthesis and implementation
-fpga:
+fpga: 
 	@make clean
 	@mkdir -p $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)/$(LOG_DIR)
 	@make syn | tee $(BUILD_DIR)/$(LOG_DIR)/synth.log
 	@make imp
 	@make program
-
-
-# Synthesis;
-# inputs HDL sources from .prj file, outputs an EDIF netlist to $(EDIF)
-$(EDIF): $(VHD_IN) $(SDC_IN) $(PCF_IN)
-	@mkdir -p $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)/$(LOG_DIR)
-	@mkdir -p $(BUILD_DIR)/$(RPT_DIR)
-	@mkdir -p $(BUILD_DIR)/$(SYN_DIR)
-
-	export SYNPLIFY_PATH=$(ICE2_DIR)/synpbase
-	export SBT_DIR=$(BUILD_DIR)/$(SYN_DIR)
-
-	$(call RUN,Synplify)
-	"$(ICE2_BIN)/synpwrap/synpwrap" \
-	-prj "src/$(PROJ_NAME)_syn.prj" \
-	-log "$(BUILD_DIR)/$(SYN_DIR)/$(PROJ_NAME).srr"
-
-	@rm stdout.log synlog.tcl
-	@echo "$(shell date +"%Y-%m-%d %T"): set EDIF netlist at $(EDIF)"
-	@cp $(BUILD_DIR)/$(SYN_DIR)/$(PROJ_NAME).srr $(BUILD_DIR)/$(RPT_DIR)/synth_report.srr
-	@echo "\e[1;32m$(shell date +"%Y-%m-%d %T"): ======== DONE ========\e[m"
-
-syn: $(EDIF)
 
 
 # Lattice implementation flow wrapper
@@ -168,15 +147,42 @@ imp:
 	@make bitmap | tee $(BUILD_DIR)/$(LOG_DIR)/bitmap.log
 
 
+# Synthesis;
+# inputs HDL sources from .prj file, outputs an EDIF netlist to $(EDIF)
+$(EDIF): $(VHD_IN) $(SDC_IN) $(PCF_IN)
+	@mkdir -p $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)/$(LOG_DIR)
+	@mkdir -p $(BUILD_DIR)/$(RPT_DIR)
+	@mkdir -p $(BUILD_DIR)/$(SYN_DIR)
+
+	export SYNPLIFY_PATH=$(ICE2_DIR)/synpbase
+	export SBT_DIR=$(BUILD_DIR)/$(SYN_DIR)
+
+	$(call SYN_RUN,synpwrap) -prj "src/$(PROJ_NAME)_syn.prj" \
+	-log "$(BUILD_DIR)/$(SYN_DIR)/$(PROJ_NAME).srr"
+	@EXIT_CODE=$$?
+
+	@rm -f stdout.log synlog.tcl
+	@if [ $$EXIT_CODE -eq 0 ]; then
+		echo "$(shell date +"%Y-%m-%d %T"): set EDIF netlist at $(EDIF)"
+		cp $(BUILD_DIR)/$(SYN_DIR)/$(PROJ_NAME).srr $(BUILD_DIR)/$(RPT_DIR)/synth_report.srr 
+		echo "\e[1;32m$(shell date +"%Y-%m-%d %T"): ======== synpwrap done ========\e[m" 
+	else
+#		echo "$(shell date +"%Y-%m-%d %T"): gnu make got exit code $$EXIT_CODE" 
+		exit $$EXIT_CODE 
+	fi
+
+syn: $(EDIF)
+
+
 # EDIF parser; 
 # inputs the EDIF netlist from synthesis 
 # outputs timing constraints at $(BUILD_DIR)/Temp/sbt_temp.sdc and library database at $(BUILD_DIR)/$(IMP_DIR)/oadb-*
 $(SDC_TP): $(EDIF)
 
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)
-	$(call RUN,EDIF Parser)
-	"$(ICE2_BIN)/edifparser" \
-	"$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
+
+	$(call ICE_RUN,edifparser) "$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
 	"$(BUILD_DIR)/$(SYN_DIR)/$(PROJ_NAME).edf " \
 	"$(BUILD_DIR)/$(IMP_DIR)" \
 	"-p$(PACKAGE)" \
@@ -197,11 +203,9 @@ edifparser: $(SDC_TP)
 # outputs placed constraints at $(BUILD_DIR)/$(IMP_DIR)/$(PL_DIR)/$(PROJ_NAME)_placed_constr.sdc
 $(SDC_PL): $(SDC_TP)
 
-	$(call RUN,SBT Placer)
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(PL_DIR)
 
-	"$(ICE2_BIN)/sbtplacer" \
-	--des-lib "$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
+	$(call ICE_RUN,sbtplacer) --des-lib "$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
 	--outdir "$(BUILD_DIR)/$(IMP_DIR)/$(PL_DIR)" \
 	--device-file "$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
 	--package $(PACKAGE) \
@@ -224,11 +228,9 @@ sbtplacer: $(SDC_PL)
 # outputs packed constraints (*_packed_constr.sdc) file at $(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)
 $(SDC_PK): $(SDC_PL)
 
-	$(call RUN,Packer)
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)
-
-	"$(ICE2_BIN)/packer" \
-	"$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
+	
+	$(call ICE_RUN,packer) "$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
 	"$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
 	--package $(PACKAGE) \
 	--outdir "$(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)" \
@@ -238,8 +240,7 @@ $(SDC_PK): $(SDC_PL)
 	--dst_sdc_file "$(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)/$(PROJ_NAME)_packed_constr.sdc" \
 	--devicename $(PART_CODE)
 
-	"$(ICE2_BIN)/packer" \
-	"$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
+	$(call ICE_RUN,packer) "$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
 	"$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
 	--package $(PACKAGE) \
 	--outdir "$(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)" \
@@ -257,11 +258,9 @@ packer: $(SDC_PK)
 # inputs packed constraints, outputs standard delay file (SDF) for use by sbtimer 
 $(ROUTE): $(SDC_PK)
 
-	$(call RUN,SB Router)
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(RT_DIR)
-
-	"$(ICE2_BIN)/sbrouter" \
-	"$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
+	
+	$(call ICE_RUN,sbrouter) "$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
 	"$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
 	"$(ICE2_DIR)/sbt_backend/devices/ice40HX1K.lib" \
 	"$(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)/$(PROJ_NAME)_packed_constr.sdc" \
@@ -279,11 +278,9 @@ sbrouter: $(ROUTE)
 # outputs VHDL and verilog files, and *_routed_constr.sdc
 $(SBT): $(ROUTE)
 
-	$(call RUN,Netlister)
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(NL_DIR)
-
-	"$(ICE2_BIN)/netlister" \
-	--verilog "$(BUILD_DIR)/$(IMP_DIR)/$(NL_DIR)/$(PROJ_NAME)_sbt.v" \
+	
+	$(call ICE_RUN,netlister) --verilog "$(BUILD_DIR)/$(IMP_DIR)/$(NL_DIR)/$(PROJ_NAME)_sbt.v" \
 	--vhdl "$(BUILD_DIR)/$(IMP_DIR)/$(NL_DIR)/$(PROJ_NAME)_sbt.vhd" \
 	--lib "$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
 	--view rt \
@@ -304,8 +301,7 @@ $(RPT): $(SBT)
 	$(call RUN,SB Timer)
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(TM_DIR)
 
-	"$(ICE2_BIN)/sbtimer" \
-	--des-lib "$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
+	$(call ICE_RUN,sbtimer) --des-lib "$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
 	--lib-file "$(ICE2_DIR)/sbt_backend/devices/ice40HX1K.lib" \
 	--sdc-file "$(BUILD_DIR)/$(IMP_DIR)/$(NL_DIR)/$(PROJ_NAME)_routed_constr.sdc" \
 	--sdf-file "$(BUILD_DIR)/$(IMP_DIR)/$(NL_DIR)/$(PROJ_NAME)_routed_delays.sdf" \
@@ -323,11 +319,9 @@ sbtimer: $(RPT)
 # Generate bitstream BIN
 $(BIN): $(RPT)
 
-	$(call RUN,Bitmap)
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(BM_DIR)
 
-	"$(ICE2_BIN)/bitmap" \
-	"$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
+	$(call ICE_RUN,bitmap) "$(ICE2_DIR)/sbt_backend/devices/ICE40P01.dev" \
 	--design "$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
 	--device_name $(PART_CODE) \
 	--package $(PACKAGE) \
@@ -346,8 +340,9 @@ bitmap: $(BIN)
 
 
 # Program icestick with Yosys icestorm programmer
-program:
+program :
 	iceprog -b $(BIN)
+
 
 
 clean:
