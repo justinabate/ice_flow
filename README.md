@@ -1,11 +1,12 @@
 # ice_flow
-Lattice iCEcube2 makefile build flow for Linux. Adapted from a Windows-oriented flow by [VHDLwhiz](https://vhdlwhiz.com/).<br>
-Targets the [iCEstick](https://www.latticesemi.com/icestick) (iCE40-HX1K) with a simple circuit to PWM the LEDs 
+- Lattice iCEcube2 makefile build flow for Linux.<br/>
+- Adapted from a Windows-oriented flow by [VHDLwhiz](https://vhdlwhiz.com/).<br>
+- Targets [iCEstick](https://www.latticesemi.com/icestick) (iCE40-HX1K) with a simple circuit to PWM the LEDs 
 
 ## Dependencies
-```make```<br/>
 [Lattice iCEcube2](https://www.latticesemi.com/iCEcube2)<br/>
 [YosysHQ icestorm](https://github.com/YosysHQ/icestorm)<br/>
+```make```<br/>
 
 ## Usage
 (1) Adjust the starting lines of the makefile for the path of your iCEcube2 installation<br/>
@@ -20,4 +21,4 @@ sudo apt-get install -qy libelf1:i386
 find /usr/ -type f -name "libelf*" -exec ls -l {} \; # got /usr/lib/i386-linux-gnu/libelf-0.176.so
 ln -s /usr/lib/i386-linux-gnu/libelf-0.176.so /opt/lscc/iCEcube2.2017.08/sbt_backend/lib/linux/opt/libelf.so.1
 ```
-The makefile sets a ```$LD_LIBRARY_PATH``` variable which can find the symlink 
+The makefile sets a ```$LD_LIBRARY_PATH``` variable which finds the symlink 
