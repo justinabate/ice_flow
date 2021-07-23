@@ -10,8 +10,8 @@
 
 ## Usage
 (1) Adjust the starting lines of the makefile for the path of your iCEcube2 installation<br/>
-(2) ```git clone https://github.com/justinabate/ice_mod.git```<br/>
-(3) ```cd ice_mod; make fpga``` (synthesize, implement, and program), or ```make help``` for an individual process
+(2) ```git clone https://github.com/justinabate/ice_flow.git```<br/>
+(3) ```cd ice_flow; make fpga``` (synthesize, implement, and program), or ```make help``` for an individual process
 
 ## Remarks
 The .prj file in src/ must be manually updated with source file information; the paths specified at the bottom of the file must match the build and synthesis directories set in the makefile <br/> 
