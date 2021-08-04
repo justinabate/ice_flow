@@ -2,6 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use ieee.std_logic_unsigned.all;
+use ieee.math_real.all;
 
 
 -- Fits the Lattice iCEstick FPGA board
@@ -46,9 +47,10 @@ architecture str of led_breathing is
 
   --! delay RAM signals
   constant ram_depth : natural := 2048;
+  constant ram_depth_size : natural := integer(ceil(log2(real(ram_depth))));
   constant ram_qty : natural := 15;
   signal r_wen : std_logic_vector(ram_qty-1 downto 0);
-  type t_addr is array (0 to ram_qty-1) of integer range 0 to ram_depth-1;
+  type t_addr is array (0 to ram_qty-1) of unsigned(ram_depth_size-1 downto 0);
   signal r_waddr : t_addr;
   signal r_raddr : t_addr;
   type t_data is array (0 to ram_qty-1) of std_logic_vector(1 downto 0);
@@ -107,8 +109,8 @@ begin
 
         if rst = '1' then
           r_wen(k) <= '0';
-          r_waddr(k) <= 0; 
-          r_raddr(k) <= 0; --! offset the read pointer by half of the depth
+          r_waddr(k) <= to_unsigned(0,r_waddr(k)'length); 
+          r_raddr(k) <= to_unsigned(0,r_raddr(k)'length); --! offset the read pointer by half of the depth
           r_wdata(k) <= (others => '0'); 
         else
 
@@ -153,11 +155,11 @@ begin
       --! write-side
       wr_clk => clk, -- in std_logic;
       wr_en => r_wen(k), -- std_logic;
-      wr_addr => r_waddr(k), -- in integer range 0 to ram_depth;
+      wr_addr => to_integer(r_waddr(k)), -- in integer range 0 to ram_depth;
       din => r_wdata(k), -- in std_logic_vector(ram_width - 1 downto 0);
       --! read-side
       rd_clk => clk, -- in std_logic;
-      rd_addr => r_raddr(k), -- in integer range 0 to ram_depth;
+      rd_addr => to_integer(r_raddr(k)), -- in integer range 0 to ram_depth;
       dout => r_rdata(k) -- out std_logic_vector(ram_width - 1 downto 0)
     );
   end generate ram_gen;

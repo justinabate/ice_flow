@@ -25,9 +25,10 @@
 ### Make project and installation-specific changes here #######################
 #
 # base directory of iCEcube2 installation
-ICE2_DIR = /opt/lscc/iCEcube2.2017.08
+ICE2_DIR = /opt/lscc/iCEcube2.2020.12
+LM_LICENSE_FILE = $(ICE2_DIR)/../license.dat
 # base directory of Modelsim intel FPGA starter edition
-vsim20_loc = /opt/altera/20.1/modelsim_ase/linuxaloem 
+vsim20_loc = /opt/lscc/iCEcube2.2020.12/modeltech/linuxloem
 #
 PROJ_NAME = led_breathing
 PART_CODE = iCE40HX1K
@@ -115,15 +116,17 @@ help:
 
 
 # Call Modelsim
-sim:
-	export PATH=$(vsim20_loc)
-	vcom -work work hdl/reset.vhd
-	vcom -work work hdl/pwm.vhd
-	vcom -work work hdl/counter.vhd
-	vcom -work work hdl/sine_rom.vhd
-	vcom -work work hdl/led_breathing.vhd
-	vcom -work work hdl/led_breathing_tb.vhd
-	vsim work.led_breathing_tb -t 1fs -do src/run.do
+sim: clean
+	@export PATH=$(vsim20_loc):$$PATH
+	@export LM_LICENSE_FILE=$(LM_LICENSE_FILE)
+	@vcom -work work hdl/reset.vhd
+	@vcom -work work hdl/pwm.vhd
+	@vcom -work work hdl/counter.vhd
+	@vcom -work work hdl/sine_rom.vhd
+	@vcom -work work hdl/bram_two_port_simple.vhd
+	@vcom -work work hdl/led_breathing.vhd
+	@vcom -work work hdl/led_breathing_tb.vhd
+	@vsim work.led_breathing_tb -t 1fs -do src/run.do
 
 
 # Run icecube2 synthesis and implementation
@@ -147,8 +150,8 @@ imp:
 	@make bitmap | tee $(BUILD_DIR)/$(LOG_DIR)/bitmap.log
 
 
-# Synthesis;
-# inputs HDL sources from .prj file, outputs an EDIF netlist to $(EDIF)
+# Synthesis; input the HDL sources from .prj file, then ...
+# output an EDIF netlist to $(EDIF)
 $(EDIF): $(VHD_IN) $(SDC_IN) $(PCF_IN)
 	@mkdir -p $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)/$(LOG_DIR)
@@ -175,9 +178,9 @@ $(EDIF): $(VHD_IN) $(SDC_IN) $(PCF_IN)
 syn: $(EDIF)
 
 
-# EDIF parser; 
-# inputs the EDIF netlist from synthesis 
-# outputs timing constraints at $(BUILD_DIR)/Temp/sbt_temp.sdc and library database at $(BUILD_DIR)/$(IMP_DIR)/oadb-*
+# EDIF parser; input the EDIF netlist from synthesis, then ...
+# output the timing constraints at $(BUILD_DIR)/Temp/sbt_temp.sdc, and 
+# output the library database at $(BUILD_DIR)/$(IMP_DIR)/oadb-*
 $(SDC_TP): $(EDIF)
 
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)
@@ -198,9 +201,8 @@ $(SDC_TP): $(EDIF)
 edifparser: $(SDC_TP)
 
 
-# Placer;
-# inputs timing constraints from build/Temp/sbt_temp.sdc
-# outputs placed constraints at $(BUILD_DIR)/$(IMP_DIR)/$(PL_DIR)/$(PROJ_NAME)_placed_constr.sdc
+# Placer; input the temp timing constraints from build/Temp/sbt_temp.sdc, then ...
+# output placed constraints at $(BUILD_DIR)/$(IMP_DIR)/$(PL_DIR)/$(PROJ_NAME)_placed_constr.sdc
 $(SDC_PL): $(SDC_TP)
 
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(PL_DIR)
@@ -221,11 +223,8 @@ $(SDC_PL): $(SDC_TP)
 sbtplacer: $(SDC_PL)
 
 
-# Packer;
-# input the placer's design database
-# output a packed SDC
-# Run DRC on the netlist, then pack
-# outputs packed constraints (*_packed_constr.sdc) file at $(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)
+# Packer; input the placer's design database, run DRC, then ...
+# output a packed constraints (*_packed_constr.sdc) file at $(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)
 $(SDC_PK): $(SDC_PL)
 
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(PK_DIR)
@@ -254,8 +253,7 @@ $(SDC_PK): $(SDC_PL)
 packer: $(SDC_PK)
 
 
-# Router;
-# inputs packed constraints, outputs standard delay file (SDF) for use by sbtimer 
+# Router; inputs packed constraints, outputs standard delay file (SDF) for use by sbtimer 
 $(ROUTE): $(SDC_PK)
 
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(RT_DIR)
@@ -274,8 +272,7 @@ $(ROUTE): $(SDC_PK)
 sbrouter: $(ROUTE)
 
 
-# Verilog & VHDL netlister
-# outputs VHDL and verilog files, and *_routed_constr.sdc
+# Verilog & VHDL netlister: outputs VHDL and verilog files, and *_routed_constr.sdc
 $(SBT): $(ROUTE)
 
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(NL_DIR)
@@ -298,7 +295,6 @@ netlister: $(SBT)
 # Static timing analysis report
 $(RPT): $(SBT)
 
-	$(call RUN,SB Timer)
 	@mkdir -p $(BUILD_DIR)/$(IMP_DIR)/$(TM_DIR)
 
 	$(call ICE_RUN,sbtimer) --des-lib "$(BUILD_DIR)/$(IMP_DIR)/oadb-$(PROJ_NAME)" \
@@ -342,7 +338,6 @@ bitmap: $(BIN)
 # Program icestick with Yosys icestorm programmer
 program :
 	iceprog -b $(BIN)
-
 
 
 clean:
